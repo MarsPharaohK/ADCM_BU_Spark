@@ -1,4 +1,4 @@
-# ADCM
+# ADCM_AI-Assisted Design Competency Matrix
 
 ADCM is a guided web tool for students who design with generative AI. It helps students make decisions about AI outputs, trace those outputs back to the assumptions that produced them, and change the conditions of generation on purpose. It also gives instructors a readable record of each student's process.
 
