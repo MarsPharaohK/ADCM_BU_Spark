@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.5 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<script src="config.js"></script>
 </head>
 <body>
 <title>ADCM</title>
@@ -364,6 +365,7 @@ details.ex > div{padding:0 18px 18px;display:flex;flex-direction:column;gap:8px;
 .loopnote{margin:0;padding:14px 26px 18px;font-family:var(--f-body);font-size:16px;line-height:1.5;color:var(--muted);border-top:1px dashed var(--gray3)}
 details.optb > div{color:var(--ink);font-size:inherit;padding-top:8px;gap:var(--s3,40px)}
 details.optb summary .opt{vertical-align:middle}
+.savest{font-family:var(--f-ui);color:var(--muted)}
 /* Toast (kit: black filled, info icon) */
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--surface);padding:12px 20px;border-radius:var(--rc);font-size:18px;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 4px 0 var(--gray3)}
 .toast.on{opacity:1}
@@ -608,8 +610,8 @@ const DB={students:[{id:'demo',name:'Example student',school:'Example College',m
 const me=()=>DB.students.find(s=>s.id===DB.me);
 let screen='start',arg=null,pend={},edit=null;
 const KEY='adcm-v2';
-function persist(){try{localStorage.setItem(KEY,JSON.stringify({DB,seq,screen,arg}))}catch(e){if(!persist.warned){persist.warned=1;toast('Browser storage is full, so the newest screenshots may not be kept.')}}}
-function restore(){try{const r=JSON.parse(localStorage.getItem(KEY)||'null');if(!r||!r.DB)return;Object.assign(DB,r.DB);seq=Math.max(seq,r.seq||0);
+function persist(){if(CLOUD){if(DB.role)try{localStorage.setItem(KEY+'-nav',JSON.stringify({screen,arg}))}catch(e){}scheduleSave();return}try{localStorage.setItem(KEY,JSON.stringify({DB,seq,screen,arg}))}catch(e){if(!persist.warned){persist.warned=1;toast('Browser storage is full, so the newest screenshots may not be kept.')}}}
+function restore(){if((window.ADCM_CONFIG||{}).url)return;try{const r=JSON.parse(localStorage.getItem(KEY)||'null');if(!r||!r.DB)return;Object.assign(DB,r.DB);seq=Math.max(seq,r.seq||0);
  const ok=(sc,pre,bad)=>sc&&sc.startsWith(pre)&&!bad.includes(sc);
  if(DB.me&&me()){screen=ok(r.screen,'s-',['s-signup','s-consent'])?r.screen:'s-home';arg=screen==='s-step'?r.arg:null}
  else if(DB.teacher){screen=ok(r.screen,'t-',['t-signup','t-consent'])?r.screen:'t-courses';arg=r.arg}
@@ -675,26 +677,31 @@ function start(){return `
 
 <section class="sec" id="ready"><div class="cta"><div class="split">
  <div class="copy"><h2>Ready? Take the first step.</h2><p>Setup takes about a minute. Pick your side.</p></div>
- <div class="btns"><button class="btn" data-go="s-signup">I'm a student →</button><button class="btn alt" data-go="t-signup">I'm an instructor</button></div>
+ <div class="btns"><button class="btn" data-go="s-signup">I'm a student →</button><button class="btn alt" data-go="t-signup">I'm an instructor</button>${CLOUD?'<button class="link" data-go="login">I already have an account</button>':''}</div>
 </div></div></section>
 <footer class="credit"><span>ADCM (AI-Assisted Design Competency Matrix) was developed by <b>Lingyi Kong</b>.</span><span>Pilot version</span></footer>`}
-function home(){return `<div class="col wide"><div class="head"><span class="tag">✦ for design hackathons</span><h1>Who's here?</h1><p class="sub">Pick your side. You can use as much or as little of the helper as you need.</p></div>
+function home(){return `<div class="col wide"><div class="head"><span class="tag">✦ for design hackathons</span><h1>Who's here?</h1><p class="sub">Pick your side. You can use as much or as little of the helper as you need.${CLOUD?' Already signed up? <button class="link" data-go="login">Log in</button>':''}</p></div>
  <div class="roles">
   <button class="role stk p-try" data-go="s-signup"><span class="em" aria-hidden="true">🧑‍🎨</span><b>I'm a student</b><span>Get prompts, checklists, and a map for when you're stuck. Mostly taps and screenshots.</span><i>Let's go →</i></button>
   <button class="role stk p-teach" data-go="t-signup"><span class="em" aria-hidden="true">🧑‍🏫</span><b>I'm an instructor</b><span>See how each student got to their design, and leave feedback right where it matters.</span><i>Open instructor view →</i></button>
  </div></div>`}
-function signup(role){const s=role==='s';return `<div class="col ${s?'p-try':'p-teach'}"><div class="head"><span class="tag">${s?'🧑‍🎨 Student':'🧑‍🏫 Instructor'} · 1 of 2</span><h1>Hey! Who are you?</h1></div>
- <form data-form="${role}-signup">${F.text('name','Name')}${F.text('email','Email',{type:'email'})}
-  <div class="two">${F.text('school','School')}${F.text('major',s?'Major':'Department')}</div>
+function signup(role){const s=role==='s',pv=k=>((s?DB.pendingStudent:DB.pendingTeacher)||{})[k];return `<div class="col ${s?'p-try':'p-teach'}"><div class="head"><span class="tag">${s?'🧑‍🎨 Student':'🧑‍🏫 Instructor'} · 1 of 2</span><h1>Hey! Who are you?</h1>${CLOUD?`<p class="sub">Already signed up? <button class="link" data-go="login">Log in</button></p>`:''}</div>
+ <form data-form="${role}-signup">${F.text('name','Name',{v:pv('name')})}${F.text('email','Email',{type:'email',v:pv('email')})}
+  ${CLOUD?pw('Create a password','At least 8 characters. You will use it to log back in on any device.','new-password'):''}
+  <div class="two">${F.text('school','School',{v:pv('school')})}${F.text('major',s?'Major':'Department',{v:pv('major')})}</div>
+  ${CLOUD?F.text('course','Course code',{ph:'Ask your '+(s?'instructor':'program lead'),v:pv('course')}):''}
+  ${CLOUD&&!s?F.text('icode','Instructor code',{ph:'The private code for instructors',v:pv('icode')}):''}
   <div class="actions"><button class="btn">Next →</button><button type="button" class="link" data-go="home">Back</button></div></form></div>`}
 function consent(role){const s=role==='s';return `<div class="col ${s?'p-try':'p-teach'}"><div class="head"><span class="tag">🔒 Data protocol · 2 of 2</span><h1>Quick heads-up about your data</h1><p class="sub">Short version below. Check the box to start.</p></div>
  <div class="protocol stk"><dl>
   ${s?`<div><dt>📦 What we save</dt><dd>Your finish line, keywords, screenshots, the options you tap, your one-liners, and replies to feedback.</dd></div>
   <div><dt>🎯 Why</dt><dd>So your instructor can see your process and give feedback, and so we can study how students design with AI.</dd></div>
-  <div><dt>👀 Who sees it</dt><dd>Your instructor and the research team.</dd></div>`:
+  <div><dt>👀 Who sees it</dt><dd>The instructors of your course and the research team.</dd></div>
+  <div><dt>📊 Usage</dt><dd>We also count how many people and schools use ADCM, to report on its adoption.</dd></div>`:
   `<div><dt>📦 What we save</dt><dd>Your course setup and the feedback you leave on student records.</dd></div>
   <div><dt>🎯 Why</dt><dd>So students can see and reply to your feedback, and so we can study how feedback shapes their decisions.</dd></div>
-  <div><dt>👀 Who sees it</dt><dd>Your students and the research team.</dd></div>`}
+  <div><dt>👀 Who sees it</dt><dd>Your students and the research team.</dd></div>
+  <div><dt>📊 Usage</dt><dd>We also count how many people and schools use ADCM, to report on its adoption.</dd></div>`}
   <div><dt>✋ Your call</dt><dd>You can ask to have your data removed at any time.</dd></div></dl></div>
  <form data-form="${role}-consent"><label class="agree stk"><input type="checkbox" name="ok" id="f-ok" required><span>I allow my ${s?'practice':'course and feedback'} data to be saved for feedback and research.</span></label>
   <div class="actions"><button class="btn" id="consentBtn" disabled>Agree and start →</button><button type="button" class="link" data-go="${role}-signup">Back</button></div></form></div>`}
@@ -788,7 +795,7 @@ async function exportDeck(kind){const u=me(),sl=buildSlides(u.d,u),note=$('#dlno
  const ns=await dlNS();
  toast('Building your deck…');
  try{const blob=kind==='pptx'?await makePptx(sl,u):await makePdf(sl,u);const base=(u.d.project||'adcm-deck').replace(/[^\w-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'adcm-deck';
-  const fname=`${base}-deck.${kind}`;if(ns){await ns.save({filename:fname,data:blob})}else{const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000)}toast('Downloaded ✓')}
+  const fname=`${base}-deck.${kind}`;if(ns){await ns.save({filename:fname,data:blob})}else{const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000)}track('export',{kind});toast('Downloaded ✓')}
  catch(e){const c=e&&e.code;if(c==='declined')return;note.textContent=c==='rate_limited'?'A download prompt is already open. Finish that one first.':e&&e.message==='load'?'Could not load the deck builder. Check your connection and try again.':'That download did not work here. Use "Copy outline" instead.'}}
 const rw=(html,when,cur)=>html.replace(' required',` data-rw="${when}"${cur===when?' required':''}`);
 function exForm(d){const E=ED(d,'ex'),tr=d.iss;return `<form data-form="ex">${editBar(E,'ex')}
@@ -915,30 +922,124 @@ const CARD={
  ver:x=>`${thumbs(x.imgs)||'<div class="ph" style="max-width:260px">no screenshot in example</div>'}<div>${x.note?'Changed '+br(x.note):x.from?`The "before", from ${esc(x.from)}`:'The "before" (baseline)'}</div>${x.dec?`<div class="meta"><span>From change ${x.dec}</span></div>`:''}`,
  test:x=>`<div class="meta"><span>Tested ${x.on}</span><span>${esc(x.who)}</span></div><h3>${esc(x.nail)}</h3>${x.said?`<div>They said “${esc(x.said)}”</div>`:''}${x.stuck?`<div>Stuck: ${br(x.stuck)}</div>`:''}`
 };
-function courses(){return `<div class="col p-teach"><div class="head"><span class="tag">🧑‍🏫 Instructor</span><h1>Your courses</h1></div>
+function courses(){if(CLOUD){const cs=(DB.teacher&&DB.teacher.courses)||[];return `<div class="col p-teach"><div class="head"><span class="tag">🧑‍🏫 Instructor</span><h1>Your courses</h1></div>
+ <div class="steps">${cs.map(c=>`<button class="steprow" data-go="t-students" data-arg="${esc(c.code)}"><span class="av">${esc((c.name||'C')[0])}</span><span><span class="t">${esc(c.name)}</span><span class="d">${esc(c.school||'')}${c.school?' · ':''}code ${esc(c.code)}</span></span><span class="n">${c.students} student${c.students==1?'':'s'} →</span></button>`).join('')}</div>
+ <form data-form="join"><h3>Teaching another course?</h3><div class="two">${F.text('course','Course code')}${F.text('icode','Instructor code')}</div><div class="actions"><button class="btn alt">Add course</button></div></form></div>`}
+ return `<div class="col p-teach"><div class="head"><span class="tag">🧑‍🏫 Instructor</span><h1>Your courses</h1></div>
  <div class="steps"><button class="steprow" data-go="t-students"><span class="av">C</span><span><span class="t">Interaction Design Hackathon</span><span class="d">2 days · ${DB.students.length} student${DB.students.length>1?'s':''} · example course</span></span><span class="n">Open →</span></button></div></div>`}
-function students(){return `<div class="col p-teach"><div class="head"><span class="tag">Interaction Design Hackathon</span><h1>Students</h1><p class="sub">Open a student to see their process.</p></div>
+function students(){
+ if(CLOUD){const code=arg,c=((DB.teacher&&DB.teacher.courses)||[]).find(x=>x.code===code);if(!c)return loadingCol('Pick a course first.');
+  if(!(DB.loaded||{})[code]){loadCourse(code);return loadingCol('Loading students…')}
+  const list=DB.students.filter(s=>s.course===code);
+  return `<div class="col p-teach"><div class="head"><span class="tag">${esc(c.name)}</span><h1>Students</h1><p class="sub">Open a student to see their process. Student code: <b>${esc(code)}</b></p></div>
+  ${list.length?`<div class="steps">${list.map(s=>`<button class="steprow" data-go="t-archive" data-arg="${s.id}"><span class="av">${esc((s.name||'?')[0])}</span><span><span class="t">${esc(s.name)}</span><span class="d">${(s.kw||[]).filter(Boolean).map(esc).join(' · ')||'No keywords yet'}${s.major?' · '+esc(s.major):''}</span></span><span class="n">${s.sub?'submitted':s.updated?'updated '+new Date(s.updated).toLocaleDateString():''}</span></button>`).join('')}</div>`:'<p class="note">No students have joined yet. Share the student code above.</p>'}
+  <nav class="pager"><button class="link" data-go="t-courses">← Courses</button></nav></div>`}
+ return `<div class="col p-teach"><div class="head"><span class="tag">Interaction Design Hackathon</span><h1>Students</h1><p class="sub">Open a student to see their process.</p></div>
  <div class="steps">${DB.students.map(s=>`<button class="steprow" data-go="t-archive" data-arg="${s.id}"><span class="av">${esc(s.name[0])}</span><span><span class="t">${esc(s.name)}</span><span class="d">${kws(s.d).map(esc).join(' · ')||'No keywords yet'}${s.example?' · example':''}</span></span><span class="n">${timeline(s.d).length} records${s.d.submitted?' · submitted':''}</span></button>`).join('')}</div>
  <nav class="pager"><button class="link" data-go="t-courses">← Courses</button></nav></div>`}
-function archive(id){const s=DB.students.find(x=>x.id===id),d=s.d;return `<div class="col p-teach"><div class="head"><span class="tag">${esc(s.name)} · round ${d.round}</span><h1>Process</h1><p class="sub">${d.project?`Designing ${esc(d.project)} for ${esc(d.audience)}.`:'Has not set a finish line yet.'}</p>${kwbar(d)}</div>
+function archive(id){const s=DB.students.find(x=>x.id===id);if(!s)return loadingCol('Student not found.');if(!s.d){loadStudent(id);return loadingCol('Loading this student…')}const d=s.d;return `<div class="col p-teach"><div class="head"><span class="tag">${esc(s.name)} · round ${d.round}</span><h1>Process</h1><p class="sub">${d.project?`Designing ${esc(d.project)} for ${esc(d.audience)}.`:'Has not set a finish line yet.'}</p>${kwbar(d)}</div>
  ${finishCard(d)}
  <section class="tl">${timeline(d).map(x=>{const f=d.fb.filter(y=>y.type===x.k&&y.target===x.id).length;return `<button data-go="t-record" data-arg="${id}|${x.k}|${x.id}"><span class="em" aria-hidden="true">${x.e}</span><span><span class="x">${x.id} · ${x.kind}</span><span class="k">${esc(x.title)}${f?` · 💬 ${f}`:''}</span></span><span class="k">${esc(x.t)}</span></button>`}).join('')||'<p class="note">No records yet.</p>'}</section>
  ${d.submitted?`<section class="card stk"><div class="lab">Wrap-up</div><div>Hit the finish line: <b>${esc(d.hit||'—')}</b></div><div>My keywords changed the design by ${br(d.reflection)}</div></section>`:''}
- <nav class="pager"><button class="link" data-go="t-students">← Students</button></nav></div>`}
-function record(a){const [sid,k,id]=a.split('|'),s=DB.students.find(x=>x.id===sid),x=s.d[k].find(y=>y.id===id),fbs=s.d.fb.filter(f=>f.type===k&&f.target===id);
+ <nav class="pager"><button class="link" data-go="t-students" ${s.course?`data-arg="${esc(s.course)}"`:''}>← Students</button></nav></div>`}
+function record(a){const [sid,k,id]=a.split('|'),s=DB.students.find(x=>x.id===sid);if(!s)return loadingCol('Student not found.');if(!s.d){loadStudent(sid);return loadingCol()}const x=s.d[k].find(y=>y.id===id);if(!x)return loadingCol('Record not found.');const fbs=s.d.fb.filter(f=>f.type===k&&f.target===id);
  return `<div class="col p-${KIND[k][2]}"><div class="head"><span class="tag">${KIND[k][0]} ${KIND[k][1]} · ${esc(s.name)}</span><h1>${x.id}</h1>${kwbar(s.d)}</div>
  <article class="card stk"><div class="meta"><span>${esc(x.t)}</span></div>${CARD[k](x)}</article>
  ${fbs.map(f=>`<div class="fb"><span class="who">💬 Your feedback</span><div>${br(f.text)}</div><div><span class="lab">Student reply</span><div>${f.reply?br(f.reply):'No reply yet.'}</div></div></div>`).join('')}
  <form data-form="fb" data-arg="${esc(a)}">${F.area('text','Leave feedback on this record',{h:'The student sees it right under this record and can reply.'})}<div class="actions"><button class="btn">Attach feedback 💬</button></div></form>
  <nav class="pager"><button class="link" data-go="t-archive" data-arg="${sid}">← ${esc(s.name)}'s process</button></nav></div>`}
 
+/* ---------- cloud mode (Supabase). Off unless config.js sets window.ADCM_CONFIG ---------- */
+const CFG=window.ADCM_CONFIG||{};
+let SB=null,CLOUD=!!(CFG.url&&CFG.key),saveT=null,lastSaved='',saveState='',busy=false;
+const strip=d=>{const {fb,...rest}=d;return rest};
+const fbRow=r=>({id:'F'+r.id,dbid:r.id,type:r.rtype,target:r.target,text:r.text,reply:r.reply||''});
+const readNav=()=>{try{return JSON.parse(localStorage.getItem(KEY+'-nav')||'null')}catch(e){return null}};
+const courseOf=()=>DB.role==='student'?(me()||{}).course:((DB.teacher&&DB.teacher.courses&&DB.teacher.courses[0])||{}).code;
+const schoolOf=()=>DB.role==='student'?(me()||{}).school:(DB.teacher||{}).school;
+function track(event,detail){if(!CLOUD||!SB||!DB.uid)return;SB.from('events').insert({user_id:DB.uid,role:DB.role||null,course_code:courseOf()||null,school:schoolOf()||null,event,detail:detail||null}).then(()=>{},()=>{})}
+function setSave(t){saveState=t;const el=document.getElementById('savest');if(el)el.textContent=t}
+function scheduleSave(){if(!CLOUD||DB.role!=='student'||!me())return;clearTimeout(saveT);saveT=setTimeout(saveNow,700)}
+async function saveNow(){const u=me();if(!u)return;const body=strip(u.d),js=JSON.stringify(body);if(js===lastSaved){if(saveState!=='Saved')setSave('Saved');return}
+ setSave('Saving…');const {error}=await SB.from('students').update({data:body,updated_at:new Date().toISOString()}).eq('user_id',u.id);
+ if(error){setSave('Not saved yet. Retrying…');clearTimeout(saveT);saveT=setTimeout(saveNow,5000)}else{lastSaved=js;setSave('Saved')}}
+window.addEventListener('beforeunload',e=>{if(CLOUD&&DB.role==='student'&&saveState&&saveState!=='Saved'){e.preventDefault();e.returnValue=''}});
+async function initCloud(){if(!CLOUD)return;
+ try{await loadLib('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js');SB=window.supabase.createClient(CFG.url,CFG.key);
+  const {data}=await SB.auth.getSession();if(data&&data.session){if(!(await loadMe(data.session.user,true)))await SB.auth.signOut()}}
+ catch(e){toast('Could not reach the server. Check your connection and reload.')}
+ render()}
+async function loadMe(user,restoring){DB.uid=user.id;
+ const {data:st}=await SB.from('students').select('*').eq('user_id',user.id).maybeSingle();
+ if(st){const d=Object.assign(blank(),st.data||{});
+  const {data:fbs}=await SB.from('feedback').select('*').eq('student_id',user.id).order('id');d.fb=(fbs||[]).map(fbRow);
+  seq=Math.max(seq,0,...['ex','cmp','iss','dec','ver','test'].flatMap(k=>(d[k]||[]).map(x=>x.n||0)));
+  DB.students=[{id:user.id,name:st.name,email:st.email,school:st.school,major:st.major,course:st.course_code,d}];DB.me=user.id;DB.role='student';DB.teacher=null;
+  lastSaved=JSON.stringify(strip(d));saveState='Saved';
+  const nav=restoring?readNav():null;screen=nav&&nav.screen&&['s-home','s-step'].includes(nav.screen)?nav.screen:'s-home';arg=screen==='s-step'&&STEPS.some(x=>x.k===nav.arg)?nav.arg:null;
+  if(!restoring)track('login');return true}
+ const {data:cs}=await SB.rpc('my_courses');
+ if(cs&&cs.length){const {data:ci}=await SB.from('course_instructors').select('name,email,school').eq('user_id',user.id).limit(1);const p=(ci&&ci[0])||{};
+  DB.teacher={name:p.name||user.email,email:p.email,school:p.school,courses:cs};DB.role='teacher';DB.me=null;DB.students=[];DB.loaded={};
+  const nav=restoring?readNav():null;screen=nav&&nav.screen==='t-students'&&cs.some(c=>c.code===nav.arg)?'t-students':'t-courses';arg=screen==='t-students'?nav.arg:null;
+  if(!restoring)track('login');return true}
+ return false}
+async function ensureAuth(email,password){let r=await SB.auth.signUp({email,password});
+ if(r.error&&/already|registered|exists/i.test(r.error.message))r=await SB.auth.signInWithPassword({email,password});
+ if(r.error){toast(/invalid login/i.test(r.error.message)?'This email already has an account with a different password. Try logging in.':r.error.message);return null}
+ if(!r.data.session){toast('Check your email to confirm your account, then log in.');return null}
+ return r.data.user}
+async function loadCourse(code){const {data,error}=await SB.from('students').select('user_id,name,email,school,major,course_code,updated_at,kw:data->keywords,sub:data->submitted').eq('course_code',code).order('name');
+ if(error){toast('Could not load students. Reload to try again.');return}
+ for(const r of data||[]){const ex=DB.students.find(s=>s.id===r.user_id);const base={id:r.user_id,name:r.name||r.email,email:r.email,school:r.school,major:r.major,course:r.course_code,updated:r.updated_at,kw:r.kw||[],sub:!!r.sub};
+  if(ex)Object.assign(ex,base);else DB.students.push({...base,stub:true})}
+ DB.loaded=DB.loaded||{};DB.loaded[code]=true;render()}
+async function loadStudent(id){const s=DB.students.find(x=>x.id===id);if(!s||s.loading)return;s.loading=true;
+ const {data:row}=await SB.from('students').select('data').eq('user_id',id).maybeSingle();const {data:fbs}=await SB.from('feedback').select('*').eq('student_id',id).order('id');
+ s.d=Object.assign(blank(),(row&&row.data)||{});s.d.fb=(fbs||[]).map(fbRow);s.stub=false;s.loading=false;render()}
+const loadingCol=t=>`<div class="col"><p class="note">${t||'Loading…'}</p></div>`;
+const pw=(l,h,ac)=>`<label class="field"><span class="l">${l}</span>${h?`<span class="h">${h}</span>`:''}<input type="password" name="password" id="f-password" required minlength="8" autocomplete="${ac||'current-password'}"></label>`;
+function login(){return `<div class="col"><div class="head"><span class="tag">👋 Welcome back</span><h1>Log in</h1><p class="sub">Use the email and password you signed up with.</p></div>
+ <form data-form="login">${F.text('email','Email',{type:'email'})}${pw('Password')}<div class="actions"><button class="btn">Log in →</button><button type="button" class="link" data-go="start">Back</button></div></form></div>`}
+async function cloudSubmit(k,f,fd,g){
+ if(!SB){toast('Still connecting. Try again in a moment.');return}
+ if(busy)return;busy=true;const btn=f.querySelector('button.btn');if(btn)btn.disabled=true;
+ try{
+  if(k==='login'){const {data,error}=await SB.auth.signInWithPassword({email:g('email'),password:fd.get('password')});
+   if(error){toast('Email or password is not correct.');return}
+   if(!(await loadMe(data.user,false))){await SB.auth.signOut();toast('This account has no ADCM profile yet. Sign up first.');return}
+   toast('Welcome back 👋');return go(screen,arg)}
+  if(k==='s-signup'||k==='t-signup'){const code=g('course').toUpperCase();const {data:cn,error:er}=await SB.rpc('course_name',{c:code});
+   if(er){toast('Could not reach the server. Check your connection and try again.');return}
+   if(!cn){toast('That course code was not found. Check with your instructor.');return}
+   const p={name:g('name'),email:g('email'),school:g('school'),major:g('major'),course:code,courseName:cn,password:fd.get('password')};
+   if(k==='s-signup'){DB.pendingStudent=p;return go('s-consent')}p.icode=g('icode');DB.pendingTeacher=p;return go('t-consent')}
+  if(k==='s-consent'){const p=DB.pendingStudent;if(!p)return go('s-signup');const user=await ensureAuth(p.email,p.password);if(!user)return;
+   const {data:have}=await SB.from('students').select('user_id').eq('user_id',user.id).maybeSingle();
+   if(!have){const {error}=await SB.from('students').insert({user_id:user.id,course_code:p.course,name:p.name,email:p.email,school:p.school,major:p.major,consent_at:new Date().toISOString(),data:strip(blank())});
+    if(error){toast('Could not create your profile: '+error.message);return}}
+   DB.pendingStudent=null;DB.uid=user.id;await loadMe(user,true);DB.role='student';track('signup',{course:p.course});toast(`Welcome to ${p.courseName} 👋`);return go('s-step','goal')}
+  if(k==='t-consent'){const p=DB.pendingTeacher;if(!p)return go('t-signup');const user=await ensureAuth(p.email,p.password);if(!user)return;
+   const {error}=await SB.rpc('join_as_instructor',{c:p.course,ic:p.icode,n:p.name,e:p.email,sch:p.school,dep:p.major});
+   if(error){toast('The instructor code is not correct. Go back and check it.');return}
+   DB.pendingTeacher=null;DB.uid=user.id;await loadMe(user,true);track('signup',{course:p.course});toast('Welcome 👋');return go('t-courses')}
+  if(k==='join'){const code=g('course').toUpperCase();const t=DB.teacher||{};const {error}=await SB.rpc('join_as_instructor',{c:code,ic:g('icode'),n:t.name,e:t.email||'',sch:t.school||'',dep:''});
+   if(error){toast('Course code or instructor code is not correct.');return}const {data:cs}=await SB.rpc('my_courses');DB.teacher.courses=cs||[];track('join_course',{course:code});toast('Course added');return render()}
+  if(k==='fb'){const [sid,t,id]=f.dataset.arg.split('|'),s=DB.students.find(x=>x.id===sid);
+   const {data,error}=await SB.from('feedback').insert({student_id:sid,instructor_id:DB.uid,rtype:t,target:id,text:g('text')}).select().single();
+   if(error){toast('Feedback was not saved: '+error.message);return}s.d.fb.push(fbRow(data));track('feedback',{kind:t});toast('Feedback attached 💬');return render()}
+  if(k==='reply'){const d=me().d,x=d.fb.find(y=>y.id===f.dataset.id);if(!x)return;const {error}=await SB.rpc('reply_feedback',{fid:x.dbid,r:g('reply')});
+   if(error){toast('Reply was not sent. Try again.');return}x.reply=g('reply');track('reply');toast('Reply sent 💬');return render()}
+ }finally{busy=false;if(btn&&btn.isConnected)btn.disabled=false}}
+async function cloudSignOut(){try{await SB.auth.signOut()}catch(e){}DB.students=[];DB.me=null;DB.teacher=null;DB.role=null;DB.uid=null;lastSaved='';saveState='';toast('Signed out');go('start')}
+
 function render(){
  const v={start,home,'s-signup':()=>signup('s'),'s-consent':()=>consent('s'),'t-signup':()=>signup('t'),'t-consent':()=>consent('t'),
-  's-home':overview,'s-step':()=>stepPage(arg),'t-courses':courses,'t-students':students,'t-archive':()=>archive(arg),'t-record':()=>record(arg)}[screen];
+  login,'s-home':overview,'s-step':()=>stepPage(arg),'t-courses':courses,'t-students':students,'t-archive':()=>archive(arg),'t-record':()=>record(arg)}[screen];
  $('#app').innerHTML=v();$('#app').classList.toggle('landing',screen==='start');
  const u=me(),stu=(screen==='s-home'||screen==='s-step')&&u;
  const out=' · <button class="link" data-signout="1">Sign out</button>';
- $('#ctx').innerHTML=stu?`${esc(u.name)} · round ${u.d.round}${out}`:screen.startsWith('t-')&&DB.teacher&&!['t-signup','t-consent'].includes(screen)?`${esc(DB.teacher.name)}${out}`:'';
+ $('#ctx').innerHTML=stu?`${CLOUD?`<span id="savest" class="savest">${saveState}</span> · `:''}${esc(u.name)} · round ${u.d.round}${out}`:screen.startsWith('t-')&&DB.teacher&&!['t-signup','t-consent'].includes(screen)?`${esc(DB.teacher.name)}${out}`:'';
  const nav=$('#snav');nav.hidden=!stu;
  if(stu){const d=u.d;nav.innerHTML=`<div class="snav-in"><button class="np" data-go="s-home" ${screen==='s-home'?'aria-current="page"':''}>${ic('map')} Map</button>${STEPS.map(x=>{const v=stepStatus(d,x.k);return `<button class="np" data-go="s-step" data-arg="${x.k}" ${screen==='s-step'&&arg===x.k?'aria-current="page"':''}>${x.e} ${x.t}${v==='✓'?'<span class="ok">✓</span>':v?`<span class="ct">${v}</span>`:''}</button>`}).join('')}</div>`;
   const on=nav.querySelector('[aria-current]');if(on&&on.scrollIntoView)on.scrollIntoView({block:'nearest',inline:'center'})}
@@ -947,7 +1048,7 @@ function render(){
 document.addEventListener('click',e=>{
  const sc=e.target.closest('[data-scroll]');if(sc){document.getElementById(sc.dataset.scroll)?.scrollIntoView();return}
  const sp=e.target.closest('[data-stp]');if(sp){document.querySelectorAll('.stp').forEach(b=>b.setAttribute('aria-pressed',b===sp));return}
- if(e.target.closest('[data-signout]')){DB.me=null;DB.teacher=null;toast('Signed out');go('start');return}
+ if(e.target.closest('[data-signout]')){if(CLOUD){cloudSignOut();return}DB.me=null;DB.teacher=null;toast('Signed out');go('start');return}
  const xp=e.target.closest('[data-export]');if(xp){exportDeck(xp.dataset.export);return}
  const ed=e.target.closest('[data-edit]');if(ed){const [k,id]=ed.dataset.edit.split('|');screen='s-step';arg=STEP_OF[k]||k;pend={};edit=id;render();document.querySelector(`form[data-form="${k}"]`)?.scrollIntoView();return}
  const g=e.target.closest('[data-go]');if(g){e.preventDefault();go(g.dataset.go,g.dataset.arg);return}
@@ -971,6 +1072,7 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('submit',e=>{
  e.preventDefault();const f=e.target,k=f.dataset.form,fd=new FormData(f),g=n=>{const v=(fd.get(n)||'').toString().trim();const t=(fd.get(n+'__other')||'').toString().trim();return isOther(v)&&t?t:v};
+ if(CLOUD&&['login','s-signup','t-signup','s-consent','t-consent','join','fb','reply'].includes(k)){cloudSubmit(k,f,fd,g);return}
  if(k==='s-signup'){DB.pendingStudent={id:'s'+Date.now(),name:g('name'),email:g('email'),school:g('school'),major:g('major')};return go('s-consent')}
  if(k==='t-signup'){DB.pendingTeacher={name:g('name'),email:g('email'),school:g('school'),major:g('major')};return go('t-consent')}
  if(k==='s-consent'){const s=DB.pendingStudent||{id:'s'+Date.now(),name:'Student',major:''};s.consent=new Date().toISOString();s.d=blank();DB.students.push(s);DB.me=s.id;toast('Welcome 👋');return go('s-step','goal')}
@@ -978,8 +1080,8 @@ document.addEventListener('submit',e=>{
  const u=me(),d=u&&u.d,imgs=pend[k]||[],base=()=>({n:++seq,t:stamp(d)});
  if(f.querySelector('input[data-req]')&&!imgs.length){toast('Add a screenshot first 🖼️');return}
  const need=names=>{for(const n of names)if(!fd.get(n)){toast('Tap one option in each row 👆');return false}return true};
- if(k==='goal'){if(!need(['proof']))return;d.goal={quote:g('quote'),task:g('task'),proof:g('proof')};d.project=g('project');d.audience=g('audience');d.keywords=[g('k0'),g('k1'),g('k2')];d.notes.push(...imgs);toast('Finish line locked 🏁');return go('s-step','gen')}
- const put=(kk,pfx,obj,msg)=>{const E=ED(d,kk);if(E){if(obj.imgs&&!obj.imgs.length)delete obj.imgs;Object.assign(E,obj);edit=null;toast('Updated ✓')}else{d[kk].push({...base(),id:nid(d,kk,pfx),...obj});toast(msg)}return go('s-step',STEP_OF[kk])};
+ if(k==='goal'){if(!need(['proof']))return;d.goal={quote:g('quote'),task:g('task'),proof:g('proof')};d.project=g('project');d.audience=g('audience');d.keywords=[g('k0'),g('k1'),g('k2')];d.notes.push(...imgs);toast('Finish line locked 🏁');track('save',{kind:'goal'});return go('s-step','gen')}
+ const put=(kk,pfx,obj,msg)=>{const E=ED(d,kk);if(E){if(obj.imgs&&!obj.imgs.length)delete obj.imgs;Object.assign(E,obj);edit=null;toast('Updated ✓')}else{d[kk].push({...base(),id:nid(d,kk,pfx),...obj});toast(msg)}track('save',{kind:kk});return go('s-step',STEP_OF[kk])};
  if(k==='ex')return put('ex','E',{imgs:[...imgs],tool:g('tool'),tried:g('tried'),tests:g('tests')},'Saved ✨');
  if(k==='cmp'){const ids=fd.getAll('ids');if(ids.length<CMP_MIN(d)){toast(`Pick at least ${CMP_MIN(d)} to line up`);return}if(ids.length>5){toast('5 is the max');return}const K=kws(d);if(!need([...K.map((_,i)=>'v'+i),'base']))return;const votes={};K.forEach((x,i)=>votes[x]=g('v'+i));const bs=g('base');
   if(!d.ver.length){const src=d.ex.find(x=>x.id===bs);d.ver.push({n:++seq,t:stamp(d),id:'V1',imgs:src?[...src.imgs]:[],note:'',from:bs,dec:''})}
@@ -996,16 +1098,17 @@ document.addEventListener('submit',e=>{
   if(E){Object.assign(E,obj);edit=null;toast('Updated ✓');return go('s-step','change')}
   d.dec.push({...base(),id:nid(d,'dec','D'),ver:'',...obj});
   if(obj.ver){const v=d.ver.find(x=>x.id===obj.ver);v.n=++seq}
-  if(kind==='rules'){d.round++;toast(`Round ${d.round} 🔁 Try your new rule`);return go('s-step',['Who it is for','My finish line'].includes(obj.rule)?'goal':'gen')}
+  track('save',{kind:'dec',change:kind});if(kind==='rules'){d.round++;toast(`Round ${d.round} 🔁 Try your new rule`);return go('s-step',['Who it is for','My finish line'].includes(obj.rule)?'goal':'gen')}
   toast('Saved ✏️ New version added');return go('s-step','change')}
  if(k==='ver'){const E=ED(d,'ver');if(E){if(imgs.length)E.imgs=[...imgs];if(fd.has('note'))E.note=g('note');edit=null;toast('Updated ✓')}return go('s-step','change')}
  if(k==='test'){if(!need(['who','nail']))return;return put('test','T',{on:g('on'),who:g('who'),nail:g('nail'),said:g('said'),stuck:g('stuck')},'Saved 🙋')}
  if(k==='reply'){const x=d.fb.find(y=>y.id===f.dataset.id);if(x)x.reply=g('reply');toast('Reply sent 💬');return render()}
- if(k==='submit'){if(!need(['hit']))return;d.hit=g('hit');d.reflection=g('reflection');d.submitted=true;toast('Submitted 🎤');return render()}
+ if(k==='submit'){if(!need(['hit']))return;d.hit=g('hit');d.reflection=g('reflection');d.submitted=true;track('submit');toast('Submitted 🎤');return render()}
  if(k==='fb'){const [sid,t,id]=f.dataset.arg.split('|'),s=DB.students.find(x=>x.id===sid);s.d.fb.push({id:'F'+(s.d.fb.length+1),type:t,target:id,text:g('text'),reply:''});toast('Feedback attached 💬');return render()}
 });
 restore();
 render();
+initCloud();
 </script>
 
 </body>
