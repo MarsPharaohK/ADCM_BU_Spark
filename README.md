@@ -39,6 +39,8 @@ Lingyi Kong
 
 Kong, L. (2026). *ADCM: A guided tool for AI-assisted design learning* [Web application]. https://github.com/MarsPharaohK/ADCM_BU_Spark
 
+Kong, L. (forthcoming). Beyond the first output: Backward design and systems thinking as pedagogical response to generative AI. In M. F. Zawadzki & A. Simmons (Eds.). Palgrave Macmillan.
+
 Kong, L. (2026, February 1). *Backward by Design: Reframing AI literacy through systems thinking and critique pedagogy*. Design Incubation.
 
 ## License
